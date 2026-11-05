@@ -4,7 +4,7 @@
 
 This is the PS Vita / PS TV port of [Pinball NS](https://github.com/ReiniShari/Pinball-NS) by Reinhard Sharapov. In the original Game Boy Color game, each table is split into a top half and a bottom half, and the screen goes blank while the other half loads. Pinball NS joins them into a single field: both halves run together, and the ball rolls from one to the other with no loading. The original physics are kept, so it plays like the cartridge.
 
-The Vita Edition adds a native ARM front-end. The Game Boy's CPU is emulated in ARM assembly written for the Vita's Cortex-A9, so the game runs at full speed, Pikachu's voice included.
+The Vita Edition adds a native ARM front-end. The Game Boy's CPU is emulated in ARM assembly written for the Vita's Cortex-A9, so the game runs at full speed.
 
 It also plays **Pokémon Pinball Generations 1.6** by RainbowDevs, with its Gold and Silver tables.
 

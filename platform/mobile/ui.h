@@ -42,10 +42,11 @@ typedef struct {
 enum {
     UI_ACT_NONE = 0, UI_ACT_RESUME, UI_ACT_QUICKSAVE, UI_ACT_QUICKLOAD, UI_ACT_TOGGLE_VIBRATION,
     UI_ACT_TOGGLE_SOUND, UI_ACT_RESET, UI_ACT_QUIT, UI_ACT_OPEN_MENU, UI_ACT_TOGGLE_MOTION, UI_ACT_NEXT_FILTER,
-    UI_ACT_NEXT_TOUCH, UI_ACT_NEXT_COLORS, UI_ACT_ABOUT, UI_ACT_NEXT_GAME, UI_ACT_TOGGLE_CONTROLS
+    UI_ACT_NEXT_TOUCH, UI_ACT_NEXT_COLORS, UI_ACT_ABOUT, UI_ACT_NEXT_GAME, UI_ACT_TOGGLE_CONTROLS,
+    UI_ACT_NEXT_HOLD, UI_ACT_TOGGLE_ASK
 };
 
-#define UI_MENU_ITEMS 14
+#define UI_MENU_ITEMS 16
 #define UI_ABOUT_PAGES 3
 
 /* what a finger on the game does during a game (2.8): the tilts (2.9, the user's design: its left
@@ -109,6 +110,12 @@ typedef struct {
      * no MOTION TILT), the first page ABOUT in its words (NULL: the phone's) */
     uint32_t menu_hide;
     const char *about_hint;
+    /* ORIENTATION in the menu (the platforms held two ways: the Vita), hold_portrait the way it is held */
+    bool hold_entry, hold_portrait;
+    /* ASK AT START in the menu (the Vita: its screens at the start, the game and the orientation) */
+    bool ask_entry, ask_start;
+    /* a port's credits, after the author's on the second page ABOUT (NULL: none) */
+    const char *port_credits;
     const char *no_rom_how;         /* how to open a ROM there, for the screen without a ROM (NULL: the phone's) */
     bool game_gen;                  /* the game played is Pokemon Pinball Generations */
     bool other_game;                /* the other game is installed too (the menu switches) */
@@ -131,10 +138,12 @@ uint8_t ui_buttons(const Ui *ui);
 /* tools: what a finger coming down at (x, y) would press (*key: the control, -1 none) */
 uint8_t ui_hit_test(Ui *ui, float x, float y, int *key);
 int  ui_take_action(Ui *ui);
+/* the rows of the menu (for a platform drawing it its own way): their labels and UI_ACT_*, how many */
+int  ui_menu_list(const Ui *ui, const char **label, int *action, int max);
 /* the entries of the menu, by their UI_ACT_* (the platform's menus) */
-enum { UI_ENTRY_RESUME = 0, UI_ENTRY_QUICKSAVE, UI_ENTRY_QUICKLOAD, UI_ENTRY_VIBRATION, UI_ENTRY_SOUND, UI_ENTRY_MOTION,
-       UI_ENTRY_TOUCH, UI_ENTRY_CONTROLS, UI_ENTRY_FILTER, UI_ENTRY_COLORS, UI_ENTRY_GAME, UI_ENTRY_RESTART, UI_ENTRY_ABOUT,
-       UI_ENTRY_QUIT };
+enum { UI_ENTRY_RESUME = 0, UI_ENTRY_QUICKSAVE, UI_ENTRY_QUICKLOAD, UI_ENTRY_HOLD, UI_ENTRY_VIBRATION, UI_ENTRY_SOUND, UI_ENTRY_MOTION,
+       UI_ENTRY_TOUCH, UI_ENTRY_CONTROLS, UI_ENTRY_FILTER, UI_ENTRY_COLORS, UI_ENTRY_GAME, UI_ENTRY_RESTART, UI_ENTRY_ASK,
+       UI_ENTRY_ABOUT, UI_ENTRY_QUIT };
 void ui_open_menu(Ui *ui, bool open);
 void ui_toast(Ui *ui, const char *msg, double seconds);
 /* build the display list; frame_w/h: size of the current game image (0: no game) */

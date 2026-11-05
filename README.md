@@ -1,6 +1,6 @@
 # Pinball NS
 
-A project for **Pokémon Pinball** (Game Boy Color, US version) for **Android**, **iPhone**, **Windows**, **macOS** and **Linux**, written in C with an emulation core in assembly. It also plays **Pokémon Pinball Generations** 1.6, the fan-made extension of the game by RainbowDevs, with its Gold and Silver tables.
+A project for **Pokémon Pinball** (Game Boy Color, US version) for **Android**, **iPhone**, **Windows**, **macOS**, **Linux** and **PS Vita**, written in C with an emulation core in assembly. It also plays **Pokémon Pinball Generations** 1.6, the fan-made extension of the game by RainbowDevs, with its Gold and Silver tables.
 
 In the original game, each table is split into a top and a bottom stage: only one is loaded at a time, and the screen goes blank while the other is loaded. Pinball NS turns each table into **a single field**: both halves are loaded, updated and shown together on one tall screen, and the ball moves between them without any reloading. The original physics and collisions are kept, so the table plays like the original.
 
@@ -39,6 +39,10 @@ Bluetooth or USB gamepads and keyboards also work (gamepads Android does not kno
 
 iOS 14 or later. The `.ipa` is not signed by Apple: install it with your own Apple ID through a sideloading tool (AltStore, Sideloadly; with a free Apple ID the app must be refreshed every 7 days). Then give it the ROM once: tap the screen to choose it in Files, share it to Pinball NS, or copy it to Files > On My iPhone > Pinball NS (the `.ips` patch of Generations too). Everything else is as on Android: the same screen, controls, menu and settings; MOTION TILT reads the accelerometer, the Taptic Engine vibrates, and MFi, Xbox, PlayStation and Switch gamepads and keyboards work (the gamepad's home button opens the menu).
 
+## PS Vita
+
+A homebrew-enabled PS Vita or PS TV. Install `PinballNS.vpk` (VitaShell), then copy the ROM to `ux0:data/PinballNS/` (the patched ROM of Generations too). At the start, pick the game (when both are there) and how to hold the Vita: **landscape** (L / R the flippers, CROSS launches) or **portrait** (the phones' screen with its touch keys). SELECT opens the menu (ORIENTATION, MOTION TILT, saves...); SELECT + L + R also switches the orientation. The Game Boy's CPU runs in ARM assembly written for the Vita's Cortex-A9. Details in [platform/vita/README.md](platform/vita/README.md).
+
 ## Windows, macOS and Linux
 
 - **Windows** 10 or 11, 64-bit: run `PinballNS.exe`.
@@ -74,6 +78,7 @@ make android                      # PinballNS.apk (see platform/android/build_ap
 sh platform/linux/build.sh        # Linux: PinballNS and its archive
 sh platform/macos/build_mac.sh    # macOS: Pinball NS.app (universal) and its zip
 sh platform/ios/build_ipa.sh      # iPhone: PinballNS.ipa
+cmake -S platform/vita -B build/vita && cmake --build build/vita   # PS Vita: PinballNS.vpk (VitaSDK)
 ```
 
 On Windows with Visual Studio, `tools\build_msvc.bat` builds `PinballNS.exe` and the tools into `build\`. The Android build needs the NDK and the SDK build tools; `platform/android/build_apk.sh` creates its own signing key on the first build (keep it: updates must be signed with the same key). The macOS and iPhone apps build on a Mac with Xcode, or elsewhere with the NDK's clang and lld and the declarations of `platform/apple/sdk`.
@@ -85,7 +90,7 @@ On Windows with Visual Studio, `tools\build_msvc.bat` builds `PinballNS.exe` and
 | `src/front/` | Screen and sound pacing, screen filters, shared by all versions. |
 | `platform/mobile/` | The phones' screen, controls and menu (also the handheld mode of the computers). |
 | `platform/desktop/` | What the computer versions share: game, saves, settings, keys, pictures. |
-| `platform/android/`, `ios/`, `windows/`, `macos/`, `linux/` | Each system's own part; `apple/`: Objective-C from C, the mini SDK. |
+| `platform/android/`, `ios/`, `windows/`, `macos/`, `linux/`, `vita/` | Each system's own part; `apple/`: Objective-C from C, the mini SDK. |
 | `tools/` | Test and build tools. |
 
 ## Credits
@@ -93,5 +98,7 @@ On Windows with Visual Studio, `tools\build_msvc.bat` builds `PinballNS.exe` and
 Pinball NS by Reinhard Sharapov (2026). It contains no part of the game: it runs the ROM dumped from your own cartridge. The control layout of the phone versions follows a design by Gianchy3000.
 
 Pokémon Pinball Generations by RainbowDevs (formerly TPPDevs).
+
+PlayStation Vita port by Robert M & Claude (2026).
 
 Pokémon Pinball © 1995-1999 Nintendo, Creatures Inc., GAME FREAK inc. © 1999 HAL Laboratory, Inc., Jupiter Corp. Pokémon, the names of the Pokémon, Game Boy and Game Boy Color are trademarks of Nintendo.

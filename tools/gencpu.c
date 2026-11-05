@@ -100,6 +100,21 @@ static void flush_stubs(void)
 
 static int lab(void) { return ++nlab; }
 
+static void fetch16(void);
+static void pop16(void);
+static void push16(void);
+static void addr(int p);
+static void addr_ff(int r);
+static void rd(int dst);
+static void wr(int src);
+static void tick(int t);
+static void fetch8(int dst);
+static void jfalse(int cc, int n);
+static void set_pair(int p, int from);
+static void fetch_dispatch(const char *table);
+#include "gencpu_a32.h"
+#include "gencpu_a32.inc"
+
 /* ------------------------------------------------------------------ registers */
 
 static const char *X8[] = { "ch", "cl", "dh", "dl", "bh", "bl", "?", "al", "r10b", "r11b" };
@@ -153,6 +168,7 @@ static const char *a_src8(int r)
 
 static void flush(void)              /* the registers (and the time unless frozen) into GBC.s */
 {
+    if (a32) { b_flush(); return; }
     int n = lab();
     if (x64) {
         E("mov byte ptr [r15+%ld], al", OG(s.a));
@@ -198,6 +214,7 @@ static void flush(void)              /* the registers (and the time unless froze
 
 static void reload(void)             /* the registers, the time and the limit from GBC */
 {
+    if (a32) { b_reload(); return; }
     if (x64) {
         E("movzx eax, byte ptr [r15+%ld]", OG(s.a));
         E("movzx r8d, byte ptr [r15+%ld]", OG(s.f));
@@ -233,6 +250,7 @@ static void reload(void)             /* the registers, the time and the limit fr
 
 static void tick(int t)
 {
+    if (a32) { b_tick(t); return; }
     if (!careful && !wrote) {
         E(x64 ? "add r14, %d" : "add x21, x21, #%d", t);
         return;
@@ -259,11 +277,13 @@ static void tick(int t)
 
 static void addr(int p)              /* the address register = a 16-bit operand */
 {
+    if (a32) { b_addr(p); return; }
     E(x64 ? "mov esi, %s" : "mov w9, %s", x64 ? XP[p] : AP[p]);
 }
 
 static void addr_ff(int r)           /* the address register = 0xFF00 | C or T */
 {
+    if (a32) { b_addr_ff(r); return; }
     if (x64) {
         E("movzx esi, %s", r == RC ? "cl" : "r10b");
         E("or esi, 65280");
@@ -276,6 +296,7 @@ static void addr_ff(int r)           /* the address register = 0xFF00 | C or T *
 
 static void rd(int dst)              /* tick, then the byte at the address into dst */
 {
+    if (a32) { b_rd(dst); return; }
     tick(4);
     int st = lab(), back = lab();
     if (x64) {
@@ -310,6 +331,7 @@ static void rd(int dst)              /* tick, then the byte at the address into 
 
 static void wr(int src)              /* tick, then src to the byte at the address */
 {
+    if (a32) { b_wr(src); return; }
     tick(4);
     int st = lab(), back = lab();
     if (x64) {
@@ -341,12 +363,14 @@ static void wr(int src)              /* tick, then src to the byte at the addres
 
 static void pc_inc(void)
 {
+    if (a32) { E("add r6, r6, #0x10000"); return; }
     if (x64) E("inc bp");
     else { E("add w24, w24, #1"); E("and w24, w24, #0xFFFF"); }
 }
 
 static void sp_add(int d)
 {
+    if (a32) { b_sp_add(d); return; }
     if (x64) E(d > 0 ? "inc r9w" : "dec r9w");
     else { E(d > 0 ? "add w25, w25, #1" : "sub w25, w25, #1"); E("and w25, w25, #0xFFFF"); }
 }
@@ -357,7 +381,8 @@ static void fetch16(void)            /* W (= U) = the 16-bit immediate */
 {
     fetch8(RT);
     fetch8(RU);
-    if (x64) { E("shl r11d, 8"); E("or r11d, r10d"); }
+    if (a32) E("orr r2, r1, r2, lsl #8");
+    else if (x64) { E("shl r11d, 8"); E("or r11d, r10d"); }
     else E("orr w12, w11, w12, lsl #8");
 }
 
@@ -365,7 +390,8 @@ static void pop16(void)              /* W = the word on the stack */
 {
     addr(PSP); rd(RT); sp_add(1);
     addr(PSP); rd(RU); sp_add(1);
-    if (x64) { E("shl r11d, 8"); E("or r11d, r10d"); }
+    if (a32) E("orr r2, r1, r2, lsl #8");
+    else if (x64) { E("shl r11d, 8"); E("or r11d, r10d"); }
     else E("orr w12, w11, w12, lsl #8");
 }
 
@@ -373,7 +399,8 @@ static void push16(void)             /* push U (16 bits) */
 {
     sp_add(-1);
     addr(PSP);
-    if (x64) { E("mov r10d, r11d"); E("shr r10d, 8"); }
+    if (a32) E("lsr r1, r2, #8");
+    else if (x64) { E("mov r10d, r11d"); E("shr r10d, 8"); }
     else E("lsr w11, w12, #8");
     wr(RT);
     sp_add(-1);
@@ -383,6 +410,7 @@ static void push16(void)             /* push U (16 bits) */
 
 static void set_pair(int p, int from)    /* pair p = 16-bit operand from */
 {
+    if (a32) { b_set_pair(p, from); return; }
     if (x64) E("mov %s, %s", XP[p], XP[from]);
     else E("mov %s, %s", AP[p], AP[from]);
 }
@@ -390,6 +418,7 @@ static void set_pair(int p, int from)    /* pair p = 16-bit operand from */
 /* jumps to label n when the condition (0 NZ, 1 Z, 2 NC, 3 C) is false */
 static void jfalse(int cc, int n)
 {
+    if (a32) { E("tst r8, #%d", cc < 2 ? 128 : 16); E("%s L%d", (cc & 1) ? "beq" : "bne", n); return; }
     if (x64) {
         E("test r8b, %d", cc < 2 ? 128 : 16);
         E("%s L%d", (cc & 1) ? "jz" : "jnz", n);
@@ -401,6 +430,7 @@ static void jfalse(int cc, int n)
 /* an instruction that changes the interrupt state: gbc_asm_op */
 static void call_op(int op)
 {
+    if (a32) { b_call_op(op); return; }
     flush();
     if (x64) {
         E("sub rsp, 32");
@@ -427,6 +457,7 @@ static void x_flags(long table)      /* x64: F from LAHF through a table */
 
 static void alu(int op, int src)
 {
+    if (a32) { b_alu(op, src); return; }
     if (x64) {
         const char *v = X8[src];
         switch (op) {
@@ -469,6 +500,7 @@ static void alu(int op, int src)
 
 static void incdec(int r, int dec)   /* INC / DEC of a register or T */
 {
+    if (a32) { b_incdec(r, dec); return; }
     if (x64) {
         const char *v = X8[r];
         E("%s %s", dec ? "dec" : "inc", v);
@@ -495,6 +527,7 @@ static void incdec(int r, int dec)   /* INC / DEC of a register or T */
 
 static void cb_rot(int op, int r)    /* RLC RRC RL RR SLA SRA SWAP SRL of a register or T */
 {
+    if (a32) { b_cb_rot(op, r); return; }
     if (x64) {
         const char *v = X8[r];
         static const char *ins[] = { "rol", "ror", "rcl", "rcr", "shl", "sar", "rol", "shr" };
@@ -535,6 +568,7 @@ static void cb_rot(int op, int r)    /* RLC RRC RL RR SLA SRA SWAP SRL of a regi
 
 static void dispatch(const char *table, const char *idx)   /* x64: idx esi; ARM64: idx w9 */
 {
+    if (a32) { b_dispatch(table); return; }
     if (x64) {
         E("lea rdi, %s", table);
         E("movsxd rsi, dword ptr [rdi+rsi*4]");
@@ -556,6 +590,7 @@ static void dispatch(const char *table, const char *idx)   /* x64: idx esi; ARM6
 /* the next opcode at PC (fetch tick already counted) and its handler */
 static void fetch_dispatch(const char *table)
 {
+    if (a32) { b_fetch_dispatch(table); return; }
     int st = lab(), back = lab();
     if (x64) {
         E("mov esi, ebp");
@@ -589,6 +624,7 @@ static void fetch_dispatch(const char *table)
 /* the end of a step and the start of the next one (fast handlers: a copy in each) */
 static void next(void)
 {
+    if (a32) { b_next(); return; }
     if (careful) { E(x64 ? "jmp Lnext" : "b Lnext"); return; }
     if (x64) {
         E("cmp r14, r13");
@@ -614,13 +650,15 @@ static void next(void)
 
 static void gen_op(int op)
 {
+    if (a32 && !(op >= 0x40 && op < 0xC0) && b_gen_op(op)) return;
     if (op >= 0x40 && op < 0x80) {
         int dst = (op >> 3) & 7, src = op & 7;
         if (op == 0x76) call_op(0x76);                        /* HALT */
         else if (src == RM) { addr(PHL); rd(dst); }
         else if (dst == RM) { addr(PHL); wr(src); }
         else if (dst != src) {
-            if (x64) E("mov %s, %s", X8[dst], X8[src]);
+            if (a32) { if (dst == RA) b_get8("r7", src); else b_set8(dst, b_src8(src)); }
+            else if (x64) E("mov %s, %s", X8[dst], X8[src]);
             else if (dst == RA) a_get8("w26", src);
             else a_set8(dst, a_src8(src));
         }
@@ -974,7 +1012,13 @@ static void gen_cb(int cb)
     if (cb < 0x40) {
         cb_rot(bit, v);
     } else if (cb < 0x80) {
-        if (x64) {
+        if (a32) {
+            const char *s = b_src8(v);
+            E("tst %s, #%d", s, 1 << bit);
+            E("and r8, r8, #0x10");
+            E("orr r8, r8, #0x20");
+            E("orreq r8, r8, #0x80");
+        } else if (x64) {
             E("mov edi, 0");
             E("test %s, %d", X8[v], 1 << bit);
             E("setz dil");
@@ -992,10 +1036,12 @@ static void gen_cb(int cb)
         }
         return;                           /* BIT: no write */
     } else if (cb < 0xC0) {
-        if (x64) E("and %s, %d", X8[v], 255 & ~(1 << bit));
+        if (a32) { const char *s = b_src8(v); E("bic ip, %s, #%d", s, 1 << bit); b_set8(v, "ip"); }
+        else if (x64) E("and %s, %d", X8[v], 255 & ~(1 << bit));
         else { const char *s = a_src8(v); E("and w2, %s, #0x%X", s, 0xFFFFFFFFu & ~(1u << bit)); a_set8(v, "w2"); }
     } else {
-        if (x64) E("or %s, %d", X8[v], 1 << bit);
+        if (a32) { const char *s = b_src8(v); E("orr ip, %s, #%d", s, 1 << bit); b_set8(v, "ip"); }
+        else if (x64) E("or %s, %d", X8[v], 1 << bit);
         else { const char *s = a_src8(v); E("orr w2, %s, #%d", s, 1 << bit); a_set8(v, "w2"); }
     }
     if (r == RM) wr(RT);
@@ -1017,6 +1063,7 @@ static void handler(const char *prefix, int code, int is_cb)
  * tick_slow4/8, the checks before a step, the exits */
 static void routines(void)
 {
+    if (a32) { b_routines(); return; }
     if (x64) {
         /* rd_slow: high RAM, LY and STAT (not frozen: GBCFast.ff44/ff41), OAM, else gbc_read (the
          * state written back: cycles for the I/O) */
@@ -1775,7 +1822,15 @@ static void write_asm(const char *path)
     out = fopen(path, "wb");             /* LF line ends on every machine */
     if (!out) { perror(path); exit(1); }
     nlab = 0;
-    if (x64) {
+    if (a32) {
+        fprintf(out, "// cpu_a32.S - the fast interpreter of the SM83 for 32-bit ARM (PS Vita, Cortex-A9, ARM state),\n"
+                     "// written by tools/gencpu.c from its description of the instructions: do not edit, see that\n"
+                     "// file (and gencpu_a32.inc). int gbc_cpu_run(GBC *g, int64_t *budget): see gbc_exec_asm.\n\n");
+        fprintf(out, "    .syntax unified\n    .arch armv7-a\n    .arm\n    .text\n    .p2align 4\n    .globl gbc_cpu_run\n"
+                     "    .hidden gbc_cpu_run\n    .type gbc_cpu_run, %%function\n");
+        LB("gbc_cpu_run");
+        b_prologue();
+    } else if (x64) {
         fprintf(out, "; cpu_x64.asm - the fast interpreter of the SM83 for x86-64 (Windows), written by\n"
                      "; tools/gencpu.c from its description of the instructions: do not edit, see that file.\n"
                      "; int gbc_cpu_run(GBC *g, int64_t *budget): see gbc_exec_asm (src/core/gbc_exec.c).\n\n");
@@ -1826,7 +1881,8 @@ static void write_asm(const char *path)
     }
     careful = 0;
     tables();
-    if (x64) fprintf(out, "\ngbc_cpu_run ENDP\n\nEND\n");
+    if (a32) fprintf(out, "\n    .section .note.GNU-stack,\"\",%%progbits\n");
+    else if (x64) fprintf(out, "\ngbc_cpu_run ENDP\n\nEND\n");
     /* ELF: the code needs no executable stack */
     else fprintf(out, "\n#ifndef __APPLE__\n    .section .note.GNU-stack,\"\",%%progbits\n#endif\n");
     fclose(out);
@@ -1867,6 +1923,43 @@ static void write_offsets(const char *path)
     fclose(f);
 }
 
+/* gbc_asm32.h: the offsets cpu_a32.S was written with (gencpu_a32.h), checked by the 32-bit builds */
+static void write_offsets32(const char *path)
+{
+    FILE *f = fopen(path, "wb");
+    if (!f) { perror(path); exit(1); }
+    fprintf(f, "/* gbc_asm32.h - written by tools/gencpu.c: the offsets of the fields of GBC used by cpu_a32.S\n"
+               " * (tools/gencpu_a32.h, measured on a 32-bit ARM target). Included by gbc_exec.c in 32-bit builds,\n"
+               " * where an offset that differs stops the compilation: measure them again and run gencpu. */\n"
+               "#ifndef GBC_ASM32_H\n#define GBC_ASM32_H\n\n#include <stddef.h>\n\n"
+               "#define GBC_ASM_CHECK(name, expr, value) typedef char gbc_asm_check_##name[(expr) == (value) ? 1 : -1];\n\n");
+#define CK(name, expr, v) fprintf(f, "GBC_ASM_CHECK(%s, %s, %ld)\n", name, #expr, (long)(v))
+    CK("a", offsetof(GBC, s.a), A32_S_A); CK("f", offsetof(GBC, s.f), A32_S_F); CK("b", offsetof(GBC, s.b), A32_S_B);
+    CK("c", offsetof(GBC, s.c), A32_S_B + 1); CK("d", offsetof(GBC, s.d), A32_S_D); CK("e", offsetof(GBC, s.e), A32_S_D + 1);
+    CK("h", offsetof(GBC, s.h), A32_S_H); CK("l", offsetof(GBC, s.l), A32_S_H + 1); CK("sp", offsetof(GBC, s.sp), A32_S_SP);
+    CK("pc", offsetof(GBC, s.pc), A32_S_PC); CK("cycles", offsetof(GBC, s.cycles), A32_S_CYCLES);
+    CK("div16", offsetof(GBC, s.div16), A32_S_DIV16); CK("rom_bank", offsetof(GBC, s.rom_bank), A32_S_ROM_BANK);
+    CK("rom", offsetof(GBC, rom), A32_ROM); CK("rom_mask", offsetof(GBC, rom_mask), A32_ROM_MASK);
+    CK("hookbyte", offsetof(GBC, hookbyte), A32_HOOKBYTE); CK("fast", offsetof(GBC, fast), A32_FAST);
+    CK("rd", offsetof(GBCFast, rd), A32_X_RD); CK("wr", offsetof(GBCFast, wr), A32_X_WR); CK("wrf", offsetof(GBCFast, wrf), A32_X_WRF);
+    CK("oamb", offsetof(GBCFast, oamb), A32_X_OAMB); CK("hramb", offsetof(GBCFast, hramb), A32_X_HRAMB);
+    CK("watch", offsetof(GBCFast, watch), A32_X_WATCH); CK("hooks", offsetof(GBCFast, hooks), A32_X_HOOKS);
+    CK("deadline", offsetof(GBCFast, deadline), A32_X_DEADLINE); CK("dl24", offsetof(GBCFast, dl24), A32_X_DL24);
+    CK("frame_end", offsetof(GBCFast, frame_end), A32_X_FRAME_END); CK("limit", offsetof(GBCFast, limit), A32_X_LIMIT);
+    CK("vlo", offsetof(GBCFast, vlo), A32_X_VLO); CK("vhi", offsetof(GBCFast, vhi), A32_X_VHI);
+    CK("vmir_lo", offsetof(GBCFast, vmir_lo), A32_X_VMIR_LO); CK("vmir_hi", offsetof(GBCFast, vmir_hi), A32_X_VMIR_HI);
+    CK("vmir_a0", offsetof(GBCFast, vmir_a0), A32_X_VMIR_A0); CK("vmir_a1", offsetof(GBCFast, vmir_a1), A32_X_VMIR_A1);
+    CK("div_base", offsetof(GBCFast, div_base), A32_X_DIV_BASE); CK("special", offsetof(GBCFast, special), A32_X_SPECIAL);
+    CK("frozen", offsetof(GBCFast, frozen), A32_X_FROZEN); CK("tmp", offsetof(GBCFast, tmp), A32_X_TMP);
+    CK("vfast", offsetof(GBCFast, vfast), A32_X_VFAST); CK("mbc5", offsetof(GBCFast, mbc5), A32_X_MBC5);
+    CK("ff41", offsetof(GBCFast, ff41), A32_X_FF41); CK("ff44", offsetof(GBCFast, ff44), A32_X_FF44);
+    CK("stop_pc", offsetof(GBCFast, stop_pc), A32_X_STOP_PC); CK("stop_sp", offsetof(GBCFast, stop_sp), A32_X_STOP_SP);
+    CK("sizes", sizeof(GBCState) + sizeof(GBCFast), A32_SIZES);
+#undef CK
+    fprintf(f, "\n#endif\n");
+    fclose(f);
+}
+
 int main(int argc, char **argv)
 {
     const char *dir = argc > 1 ? argv[1] : "src/core";
@@ -1886,6 +1979,12 @@ int main(int argc, char **argv)
     x64 = 0;
     snprintf(path, sizeof path, "%s/cpu_a64.S", dir);
     write_asm(path);
-    printf("gencpu: %s/gbc_asm.h, cpu_x64.asm, cpu_a64.S\n", dir);
+    snprintf(path, sizeof path, "%s/gbc_asm32.h", dir);
+    write_offsets32(path);
+    a32 = 1;
+    snprintf(path, sizeof path, "%s/cpu_a32.S", dir);
+    write_asm(path);
+    a32 = 0;
+    printf("gencpu: %s/gbc_asm.h, gbc_asm32.h, cpu_x64.asm, cpu_a64.S, cpu_a32.S\n", dir);
     return 0;
 }

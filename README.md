@@ -10,6 +10,7 @@ It also plays **Pokémon Pinball Generations 1.6** by RainbowDevs, with its Gold
 
 
 
+
 <img width="2296" height="1008" alt="banner" src="https://github.com/user-attachments/assets/3495da6a-df89-4597-af9c-ebbde738e608" />
 
 

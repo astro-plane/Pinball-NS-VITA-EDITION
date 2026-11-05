@@ -109,6 +109,9 @@ bool desk_write(const char *path, const void *data, size_t size)
     return MoveFileExW(wt, wp, MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH) != 0;
 #else
     if (!ok) { remove(tmp); return false; }
+#ifdef __vita__
+    remove(path);                       /* (the Vita's rename does not replace a file) */
+#endif
     return rename(tmp, path) == 0;
 #endif
 }
@@ -708,6 +711,9 @@ bool desk_tick(Desk *d, double now)
     case UI_ACT_QUICKLOAD: ui_open_menu(&d->ui, false); desk_state_load(d); break;
     case UI_ACT_TOGGLE_VIBRATION: d->vibration = d->ui.vibration = !d->vibration; desk_cfg_save(d); break;
     case UI_ACT_TOGGLE_SOUND: d->sound = d->ui.sound = !d->sound; desk_cfg_save(d); break;
+    case UI_ACT_TOGGLE_MOTION: d->ui.motion = !d->ui.motion; break;            /* (the platform keeps it) */
+    case UI_ACT_TOGGLE_ASK: d->ui.ask_start = !d->ui.ask_start; break;     /* (the platform keeps it) */
+    case UI_ACT_NEXT_HOLD: ui_open_menu(&d->ui, false); d->hold_request = true; break;   /* (the platform turns it) */
     case UI_ACT_NEXT_TOUCH: d->ui.touch_mode = (d->ui.touch_mode + 1) % UI_TOUCHES; desk_cfg_save(d); break;
     case UI_ACT_TOGGLE_CONTROLS: d->ui.hide_controls = !d->ui.hide_controls; desk_cfg_save(d); break;
     case UI_ACT_NEXT_FILTER: d->filter = d->ui.filter = (d->filter + 1) % FX_FILTERS; desk_cfg_save(d); break;
@@ -857,7 +863,13 @@ static void page_controls(const Desk *d, uint32_t *p, int w, int h, int stride, 
  * first, the nearest one: the letters as sharp as the window's), at most 2048 x 2048 */
 static void with_text(Desk *d, DeskPicture *p)
 {
-    const char *msg = d->paused && !d->page ? "PAUSE (P to resume)" : d->osd[0] ? d->osd : NULL;
+#ifdef __vita__
+    const char *pause_msg = "PAUSE (SELECT + START to resume)";
+#else
+    const char *pause_msg = "PAUSE (P to resume)";
+#endif
+    /* a message just given (a setting changed, the help) over the pause's */
+    const char *msg = d->osd[0] ? d->osd : d->paused && !d->page ? pause_msg : NULL;
     if ((!msg && !d->page) || p->dw <= 0 || p->dh <= 0) return;
     int W = p->dw < 2048 ? p->dw : 2048, H = p->dh < 2048 ? p->dh : 2048;
     if ((size_t)W * H > d->text_cap) {

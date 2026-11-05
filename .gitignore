@@ -25,3 +25,6 @@ docs/
 # the files of Pokemon Pinball Generations (its ROM, its patch, its disassembly): not ours to publish
 Pok*mon Pinball Generations/
 *.ips
+# the artwork of the Vita version (placeholders drawn for the project)
+!platform/vita/*.png
+!platform/vita/sce_sys/**/*.png

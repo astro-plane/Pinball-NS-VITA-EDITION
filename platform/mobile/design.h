@@ -46,7 +46,7 @@ enum { ND_SCENE_SCREEN = 0, ND_SCENE_RED, ND_SCENE_BLUE, ND_SCENE_STAGE };
 #define ND_DIR_UP    0x04
 #define ND_DIR_DOWN  0x08
 
-#define ND_MENU_MAX  14
+#define ND_MENU_MAX  16
 
 /* Game Boy buttons, as the joypad bits of the emulator (GBC_*) */
 #define ND_GB_A      0x01
@@ -92,6 +92,11 @@ typedef struct {
     const char *menu_info;             /* then what the platform measured (the pace of the game, its sound) */
     const char *toast;                 /* a short message over the bottom of the game */
 } NdState;
+
+/* what a platform can change before nd_layout (defaults: the phones'): the least room the controls
+ * get (canvas rows: more makes the game smaller), the size of the flipper keys, their distance from
+ * the sides of the game, and how close to a flipper key a finger still presses it */
+extern int nd_block_min, nd_key_size, nd_key_inset, nd_key_slop;
 
 /* Layout for a screen of sw x sh pixels (inset_t / inset_b: covered by a camera cut-out;
  * corner: radius of its rounded corners), a game image of gw x gh and what is shown under it

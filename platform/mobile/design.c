@@ -324,6 +324,13 @@ static int floor_div(int a, int b) { return a >= 0 ? a / b : -((-a + b - 1) / b)
 /* the last row of a funnel's lines, under the status bar (its tip) */
 static int funnel_bottom(int hv, int depth, int nb) { return -1 + floor_div((hv - 1) * depth, hv) + nb; }
 
+/* what a platform can change (the PS Vita: its screen is less tall than the phones', and is
+ * played with the thumbs) */
+int nd_block_min = BLOCK_MIN;           /* the least room the controls get */
+int nd_key_size = KEY_W;                /* the flipper keys */
+int nd_key_inset = 5;                   /* from the sides of the game */
+int nd_key_slop = 0;                    /* a finger this close to a flipper key presses it (not on the pad) */
+
 void nd_layout(NdLayout *L, int sw, int sh, int inset_t, int inset_b, int corner, int gw, int gh, int scene, bool tee, bool hidden)
 {
     memset(L, 0, sizeof *L);
@@ -339,7 +346,7 @@ void nd_layout(NdLayout *L, int sw, int sh, int inset_t, int inset_b, int corner
     /* as wide as the screen; a screen too short for the table and its controls gets a smaller
      * picture (then black on both sides: nothing is added beside the game) */
     float s = (float)sw / ND_W;
-    float smax = (float)sh / (gh + (hidden ? HIDDEN_H : BLOCK_MIN));
+    float smax = (float)sh / (gh + (hidden ? HIDDEN_H : nd_block_min));
     if (s > smax) s = smax;
     if (s < 0.01f) s = 0.01f;
     int cw = (int)ceilf(sw / s - 0.01f), ch = (int)ceilf(sh / s - 0.01f);
@@ -367,7 +374,7 @@ void nd_layout(NdLayout *L, int sw, int sh, int inset_t, int inset_b, int corner
     int avail = L->bottom - (L->gy + gh);
     float f = avail >= BLOCK_H ? 1.0f : (avail - 5) / 60.0f;
     if (f < 0.5f) f = 0.5f;
-    int pad = (int)lroundf(PAD_W * f), key = (int)lroundf(KEY_W * f);
+    int pad = (int)lroundf(PAD_W * f), key = (int)lroundf(nd_key_size * f);
     if (pad < 24) pad = 24;
     if (key < 18) key = 18;
     int a = pad / 3 + ((pad / 3) % 2 == 0 ? 1 : 0), half = pad / 2;
@@ -397,8 +404,8 @@ void nd_layout(NdLayout *L, int sw, int sh, int inset_t, int inset_b, int corner
     int ky = gy0 + body / 2 - key / 2, kmin = L->gy + gh + (scene == ND_SCENE_RED ? 5 : 2);
     if (ky + key > b - 2) ky = b - 2 - key;
     if (ky < kmin) ky = kmin;
-    L->btn[ND_LFLIP] = (NdRect){ x0 + 5, ky, key, key };
-    L->btn[ND_RFLIP] = (NdRect){ x0 + ND_W - 5 - key, ky, key, key };
+    L->btn[ND_LFLIP] = (NdRect){ x0 + nd_key_inset, ky, key, key };
+    L->btn[ND_RFLIP] = (NdRect){ x0 + ND_W - nd_key_inset - key, ky, key, key };
 
     int ctl_top = (gy0 < ky ? gy0 : ky) - 3;
     if (hidden) {
@@ -497,6 +504,15 @@ int nd_hit(const NdLayout *L, float sx, float sy, uint8_t *dirs)
     if (d >= 0) { *dirs = (uint8_t)d; return ND_PAD; }
     if (in_key(&L->btn[ND_LFLIP], px, py)) return ND_LFLIP;
     if (in_key(&L->btn[ND_RFLIP], px, py)) return ND_RFLIP;
+    if (nd_key_slop > 0) {
+        /* near a key (its square, nd_key_slop around it), up to the pad's edge */
+        const NdRect *kl = &L->btn[ND_LFLIP], *kr = &L->btn[ND_RFLIP];
+        int s = nd_key_slop;
+        int lx1 = kl->x + kl->w + s < p->x ? kl->x + kl->w + s : p->x;
+        int rx0 = kr->x - s > p->x + p->w ? kr->x - s : p->x + p->w;
+        if (py >= kl->y - s && py < kl->y + kl->h + s && px >= kl->x - s && px < lx1) return ND_LFLIP;
+        if (py >= kr->y - s && py < kr->y + kr->h + s && px >= rx0 && px < kr->x + kr->w + s) return ND_RFLIP;
+    }
     return -1;
 }
 

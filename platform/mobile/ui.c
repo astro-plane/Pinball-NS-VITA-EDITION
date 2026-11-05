@@ -139,19 +139,21 @@ void ui_nd_prepare(Ui *ui, int fw, int fh, int scene, bool tee) { ui->scene = sc
 static const char *menu_label(const Ui *ui, int i)
 {
     switch (i) {
-    case 0: return "RESUME";
-    case 1: return "QUICK SAVE";
-    case 2: return "LOAD QUICK SAVE";
-    case 3: return ui->vibration ? "VIBRATION : ON" : "VIBRATION : OFF";
-    case 4: return ui->sound ? "SOUND : ON" : "SOUND : OFF";
-    case 5: return ui->motion ? "MOTION TILT : ON" : "MOTION TILT : OFF";
-    case 6: return ui->touch_mode == UI_TOUCH_FLIPPERS ? "GAME TOUCH : FLIPPERS" : ui->touch_mode == UI_TOUCH_OFF ? "GAME TOUCH : OFF" : "GAME TOUCH : TILT";
-    case 7: return ui->hide_controls ? "CONTROLS : HIDDEN" : "CONTROLS : SHOWN";
-    case 8: return ui->filter == UI_FILTER_DOT ? "SCREEN FILTER : DOT" : ui->filter == UI_FILTER_LCD ? "SCREEN FILTER : LCD" : "SCREEN FILTER : NONE";
-    case 9: return ui->colors == UI_COLORS_BW ? "COLORS : BLACK & WHITE" : ui->colors == UI_COLORS_GREEN ? "COLORS : GAME BOY GREEN" : "COLORS : ORIGINAL";
-    case 10: return ui->game_gen ? "GAME : GENERATIONS" : "GAME : POKéMON PINBALL";
-    case 11: return "RESTART THE GAME";
-    case 12: return "ABOUT";
+    case UI_ENTRY_RESUME: return "RESUME";
+    case UI_ENTRY_QUICKSAVE: return "QUICK SAVE";
+    case UI_ENTRY_QUICKLOAD: return "LOAD QUICK SAVE";
+    case UI_ENTRY_HOLD: return ui->hold_portrait ? "ORIENTATION : PORTRAIT" : "ORIENTATION : LANDSCAPE";
+    case UI_ENTRY_VIBRATION: return ui->vibration ? "VIBRATION : ON" : "VIBRATION : OFF";
+    case UI_ENTRY_SOUND: return ui->sound ? "SOUND : ON" : "SOUND : OFF";
+    case UI_ENTRY_MOTION: return ui->motion ? "MOTION TILT : ON" : "MOTION TILT : OFF";
+    case UI_ENTRY_TOUCH: return ui->touch_mode == UI_TOUCH_FLIPPERS ? "GAME TOUCH : FLIPPERS" : ui->touch_mode == UI_TOUCH_OFF ? "GAME TOUCH : OFF" : "GAME TOUCH : TILT";
+    case UI_ENTRY_CONTROLS: return ui->hide_controls ? "CONTROLS : HIDDEN" : "CONTROLS : SHOWN";
+    case UI_ENTRY_FILTER: return ui->filter == UI_FILTER_DOT ? "SCREEN FILTER : DOT" : ui->filter == UI_FILTER_LCD ? "SCREEN FILTER : LCD" : "SCREEN FILTER : NONE";
+    case UI_ENTRY_COLORS: return ui->colors == UI_COLORS_BW ? "COLORS : BLACK & WHITE" : ui->colors == UI_COLORS_GREEN ? "COLORS : GAME BOY GREEN" : "COLORS : ORIGINAL";
+    case UI_ENTRY_GAME: return ui->game_gen ? "GAME : GENERATIONS" : "GAME : POKéMON PINBALL";
+    case UI_ENTRY_RESTART: return "RESTART THE GAME";
+    case UI_ENTRY_ASK: return ui->ask_start ? "ASK AT START : YES" : "ASK AT START : NO";
+    case UI_ENTRY_ABOUT: return "ABOUT";
     default: return "QUIT";
     }
 }
@@ -160,16 +162,17 @@ static const char *menu_label(const Ui *ui, int i)
 static int menu_rows(const Ui *ui, int *entry)
 {
     int n = 0;
-    for (int i = 0; i < NMENU; i++) if (!(ui->menu_hide & (1u << i))) entry[n++] = i;
+    for (int i = 0; i < NMENU; i++)
+        if (!(ui->menu_hide & (1u << i)) && (i != UI_ENTRY_HOLD || ui->hold_entry) && (i != UI_ENTRY_ASK || ui->ask_entry)) entry[n++] = i;
     return n;
 }
 
 static int row_action(const Ui *ui, int row);
 
 static const int menu_action[NMENU] = {
-    UI_ACT_RESUME, UI_ACT_QUICKSAVE, UI_ACT_QUICKLOAD, UI_ACT_TOGGLE_VIBRATION, UI_ACT_TOGGLE_SOUND, UI_ACT_TOGGLE_MOTION,
+    UI_ACT_RESUME, UI_ACT_QUICKSAVE, UI_ACT_QUICKLOAD, UI_ACT_NEXT_HOLD, UI_ACT_TOGGLE_VIBRATION, UI_ACT_TOGGLE_SOUND, UI_ACT_TOGGLE_MOTION,
     UI_ACT_NEXT_TOUCH, UI_ACT_TOGGLE_CONTROLS, UI_ACT_NEXT_FILTER, UI_ACT_NEXT_COLORS, UI_ACT_NEXT_GAME, UI_ACT_RESET,
-    UI_ACT_ABOUT, UI_ACT_QUIT
+    UI_ACT_TOGGLE_ASK, UI_ACT_ABOUT, UI_ACT_QUIT
 };
 
 /* the pages ABOUT (2.7: under the entries of the menu, which then went past the bottom of a phone's
@@ -440,6 +443,14 @@ static int row_action(const Ui *ui, int row)
     return row >= 0 && row < n ? menu_action[entry[row]] : UI_ACT_NONE;
 }
 
+int ui_menu_list(const Ui *ui, const char **label, int *action, int max)
+{
+    int entry[NMENU], n = menu_rows(ui, entry);
+    if (n > max) n = max;
+    for (int i = 0; i < n; i++) { label[i] = menu_label(ui, entry[i]); action[i] = menu_action[entry[i]]; }
+    return n;
+}
+
 uint8_t ui_buttons(const Ui *ui) { return ui->menu_open ? 0 : (uint8_t)(ui->touch_buttons | ui->ext_buttons); }
 
 int ui_take_action(Ui *ui)
@@ -471,7 +482,9 @@ void ui_nd_state(const Ui *ui, NdState *st)
         st->menu_title = titles[ui->about_page < UI_ABOUT_PAGES ? ui->about_page : 0];
         if (ui->about_page == 0) st->menu_hint = ui->about_hint ? ui->about_hint : MENU_HINT;
         else if (ui->about_page == 1) {
-            st->menu_hint = MENU_CREDITS;
+            static char credits[512];
+            if (ui->port_credits) snprintf(credits, sizeof credits, "%s\n\n%s", MENU_CREDITS, ui->port_credits);
+            st->menu_hint = ui->port_credits ? credits : MENU_CREDITS;
             st->menu_credits = MENU_RIGHTS;
             st->menu_rights = "Tap for more.";
         } else {

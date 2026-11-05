@@ -10,6 +10,10 @@
 #if defined(__aarch64__) || defined(_M_ARM64)
 #include <arm_neon.h>
 #define PPU_NEON 1
+#elif defined(__ARM_NEON) || defined(__ARM_NEON__)
+#include <arm_neon.h>                   /* 32-bit ARM (the PS Vita): the same, but the table lookups (VTBL) */
+#define PPU_NEON 1
+#define PPU_NEON32 1
 #elif defined(_M_X64) || defined(__x86_64__)
 #include <tmmintrin.h>
 #define PPU_SSSE3 1
@@ -123,8 +127,15 @@ static inline void tile_rgb(uint32_t *o, uint64_t ci8, const uint32_t *pc)
     uint16x8_t w = vreinterpretq_u16_u8(vcombine_u8(z.val[0], z.val[1]));
     uint16x8x2_t ww = vzipq_u16(w, w);
     const uint8x16_t inc = vreinterpretq_u8_u32(vdupq_n_u32(0x03020100));
+#ifdef PPU_NEON32
+    uint8x8x2_t pal2 = { { vget_low_u8(pal), vget_high_u8(pal) } };
+    uint8x16_t i0 = vaddq_u8(vreinterpretq_u8_u16(ww.val[0]), inc), i1 = vaddq_u8(vreinterpretq_u8_u16(ww.val[1]), inc);
+    vst1q_u8((uint8_t *)o, vcombine_u8(vtbl2_u8(pal2, vget_low_u8(i0)), vtbl2_u8(pal2, vget_high_u8(i0))));
+    vst1q_u8((uint8_t *)(o + 4), vcombine_u8(vtbl2_u8(pal2, vget_low_u8(i1)), vtbl2_u8(pal2, vget_high_u8(i1))));
+#else
     vst1q_u8((uint8_t *)o, vqtbl1q_u8(pal, vaddq_u8(vreinterpretq_u8_u16(ww.val[0]), inc)));
     vst1q_u8((uint8_t *)(o + 4), vqtbl1q_u8(pal, vaddq_u8(vreinterpretq_u8_u16(ww.val[1]), inc)));
+#endif
 #else
 #ifdef PPU_SSSE3
     if (have_ssse3) { tile_rgb_ssse3(o, ci8, pc); return; }

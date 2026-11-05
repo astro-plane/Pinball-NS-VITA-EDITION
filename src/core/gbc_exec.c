@@ -668,9 +668,14 @@ void gbc_asm_op(GBC *g, int op)
 }
 
 #ifdef PB_ASM
-#include "gbc_asm.h"
+#include <stdint.h>
+#if UINTPTR_MAX > 0xFFFFFFFFu
+#include "gbc_asm.h"           /* cpu_x64.asm, cpu_a64.S */
+#else
+#include "gbc_asm32.h"         /* cpu_a32.S (32-bit ARM: the PS Vita) */
+#endif
 
-/* cpu_x64.asm / cpu_a64.S: runs steps until one needs the C interpreter (GBC_EXEC_MORE, before
+/* cpu_x64.asm / cpu_a64.S / cpu_a32.S: runs steps until one needs the C interpreter (GBC_EXEC_MORE, before
  * its stop conditions), or a stop condition (GBC_EXEC_DONE, GBC_EXEC_BUDGET) */
 int gbc_cpu_run(GBC *g, int64_t *budget);
 

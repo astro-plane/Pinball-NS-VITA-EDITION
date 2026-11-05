@@ -92,6 +92,7 @@ typedef struct {
     /* settings (pinball_ns.cfg) */
     bool narrow, smooth, handheld, paused, sound, vibration;
     bool quit;                              /* QUIT chosen in the menu of the handheld mode */
+    bool hold_request;                      /* ORIENTATION chosen in the menu: the platform turns it */
     int filter, colors;                     /* FX_FILTER_*, FX_COLORS_* */
     uint16_t keymap[ACT_N][DESK_MAXB];      /* keys (DK_*), 0: none */
     uint8_t padmap[ACT_N][DESK_MAXB];       /* gamepad inputs + 1, 0: none */

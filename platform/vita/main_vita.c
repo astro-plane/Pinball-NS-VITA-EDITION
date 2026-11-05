@@ -726,10 +726,11 @@ static void present(void)
 }
 
 /* The screens at the start, in a box drawn as the menu of the game (chooser.h), 3 screen pixels per
- * game pixel, at the bottom of its picture (chooser_bg.png: the logo, its background extended to the
- * screen): which game (when both ROMs are there), then how the Vita will be held; the last choices
- * highlighted. The d-pad moves, CROSS or START takes the entry, or a tap on it. The last row of the
- * second, ASK AT START, is a switch: NO, and neither is shown again (ASK AT START in the menu, again). */
+ * game pixel: centred on black, or at the bottom of a picture of your own if the VPK has one
+ * (chooser_bg.png, optional). Which game (when both ROMs are there), then how the Vita will be held;
+ * the last choices highlighted. The d-pad moves, CROSS or START takes the entry, or a tap on it. The
+ * last row of the second, ASK AT START, is a switch: NO, and neither is shown again (ASK AT START in
+ * the menu, again). */
 #define CH_SCALE 3
 
 /* the box: `n` entries, then (if `ask`) the row ASK AT START; the entry taken. `slr`: SELECT + L + R
@@ -745,7 +746,8 @@ static int choose_box(vita2d_texture *bg, const char *title, const char *const *
     uint32_t *box = (uint32_t *)malloc(sizeof(uint32_t) * W * H);
     vita2d_texture *bt = vita2d_create_empty_texture_format(W, H, SCE_GXM_TEXTURE_FORMAT_U8U8U8U8_ARGB);
     if (bt) vita2d_texture_set_filters(bt, SCE_GXM_TEXTURE_FILTER_POINT, SCE_GXM_TEXTURE_FILTER_POINT);
-    const float bx = (SCR_W - W * CH_SCALE) / 2.0f, by = SCR_H - H * CH_SCALE - 14.0f;   /* under the logo */
+    const float bx = (SCR_W - W * CH_SCALE) / 2.0f, by = bg ? SCR_H - H * CH_SCALE - 14.0f      /* under the picture */
+                                                       : (SCR_H - H * CH_SCALE) / 2.0f;   /* on black: centred */
     const uint32_t SLR = SCE_CTRL_SELECT | SCE_CTRL_LTRIGGER | SCE_CTRL_RTRIGGER;
     int drawn = -1, chosen = -1;
     bool drawn_ask = false;

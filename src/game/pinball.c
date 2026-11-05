@@ -194,6 +194,14 @@ static inline bool same16(const uint8_t *a, const uint8_t *b)
 {
     return vmaxvq_u8(veorq_u8(vld1q_u8(a), vld1q_u8(b))) == 0;
 }
+#elif defined(__ARM_NEON) || defined(__ARM_NEON__)
+#include <arm_neon.h>                   /* 32-bit ARM (the PS Vita): no across-vector maximum */
+static inline bool same16(const uint8_t *a, const uint8_t *b)
+{
+    uint8x16_t d = veorq_u8(vld1q_u8(a), vld1q_u8(b));
+    uint64x1_t o = vreinterpret_u64_u8(vorr_u8(vget_low_u8(d), vget_high_u8(d)));
+    return vget_lane_u64(o, 0) == 0;
+}
 #else
 static inline bool same16(const uint8_t *a, const uint8_t *b) { return memcmp(a, b, 16) == 0; }
 #endif
@@ -218,7 +226,7 @@ static inline void row_stats(const uint32_t *p, int n, uint32_t c0, uint32_t *mi
         for (int k = 0; k < 24; k += 8) if (((t[i] >> k) & 255) < ((m >> k) & 255)) m = (m & ~(255u << k)) | (t[i] & (255u << k));
     _mm_storeu_si128((__m128i *)t, vd);
     d |= t[0] | t[1] | t[2] | t[3];
-#elif defined(__aarch64__)
+#elif defined(__aarch64__) || defined(__ARM_NEON) || defined(__ARM_NEON__)
     uint8x16_t vm = vreinterpretq_u8_u32(vdupq_n_u32(m));
     uint32x4_t vd = vdupq_n_u32(0), vc = vdupq_n_u32(c0);
     for (; x + 4 <= n; x += 4) {

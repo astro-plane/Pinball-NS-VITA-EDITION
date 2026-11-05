@@ -9,7 +9,9 @@ The Vita Edition adds a native ARM front-end. The Game Boy's CPU is emulated in 
 It also plays **Pokémon Pinball Generations 1.6** by RainbowDevs, with its Gold and Silver tables.
 
 
+
 <img width="2296" height="1008" alt="banner" src="https://github.com/user-attachments/assets/3495da6a-df89-4597-af9c-ebbde738e608" />
+
 
 
 ## Features

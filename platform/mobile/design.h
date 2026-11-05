@@ -96,7 +96,7 @@ typedef struct {
 /* what a platform can change before nd_layout (defaults: the phones'): the least room the controls
  * get (canvas rows: more makes the game smaller), the size of the flipper keys, their distance from
  * the sides of the game, and how close to a flipper key a finger still presses it */
-extern int nd_block_min, nd_key_size, nd_key_inset, nd_key_slop;
+extern int nd_block_min, nd_key_size, nd_key_inset, nd_key_slop, nd_fill_sides;
 
 /* Layout for a screen of sw x sh pixels (inset_t / inset_b: covered by a camera cut-out;
  * corner: radius of its rounded corners), a game image of gw x gh and what is shown under it

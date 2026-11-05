@@ -851,6 +851,7 @@ int main(void)
     nd_key_size = 48;
     nd_key_inset = 3;
     nd_key_slop = 8;
+    nd_fill_sides = 1;                           /* the sides of the tables filled (the screen is wider than the game) */
     hold_load();
     D.ui.hold_entry = true;                      /* ORIENTATION in the menu */
     D.ui.ask_entry = true;                       /* ASK AT START too */

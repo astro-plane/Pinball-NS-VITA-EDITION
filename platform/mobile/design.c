@@ -330,6 +330,9 @@ int nd_block_min = BLOCK_MIN;           /* the least room the controls get */
 int nd_key_size = KEY_W;                /* the flipper keys */
 int nd_key_inset = 5;                   /* from the sides of the game */
 int nd_key_slop = 0;                    /* a finger this close to a flipper key presses it (not on the pad) */
+int nd_fill_sides = 0;                  /* a screen wider than the game: its sides filled (the frame of the table
+                                         * carried on beside the game, the panel under it as wide as the screen),
+                                         * not black */
 
 void nd_layout(NdLayout *L, int sw, int sh, int inset_t, int inset_b, int corner, int gw, int gh, int scene, bool tee, bool hidden)
 {
@@ -617,7 +620,8 @@ static int frame_dist(int x, int y, int x0, int x1, int yb, int r)
  * pixels, one from the edge), its rivets, the funnel of the drain */
 static void panel_red(Canvas *c, const NdLayout *L, int table)
 {
-    int x0 = L->gx, x1 = L->gx + ND_W, y0 = L->gy + L->gh, yb = L->vh;
+    int gx0 = L->gx, gx1 = L->gx + ND_W, y0 = L->gy + L->gh, yb = L->vh;
+    int x0 = nd_fill_sides ? 0 : gx0, x1 = nd_fill_sides ? c->w : gx1;     /* (as wide as the screen) */
     int r = L->corner > 3 ? L->corner : 3;
     RedFrame fr = red_frame(table);
     uint32_t red = faded(c, fr.frame), yel = faded(c, fr.line), blk = faded(c, C_BLACK);
@@ -630,15 +634,15 @@ static void panel_red(Canvas *c, const NdLayout *L, int table)
             }
             put_raw(c, x, y, col);
         }
-    fill(c, x0 + 1, y0 + 2, ND_W - 2, 2, fr.line);         /* the top line, under the status bar */
+    fill(c, x0 + 1, y0 + 2, x1 - x0 - 2, 2, fr.line);      /* the top line, under the status bar */
     const uint32_t bands[RED_BANDS] = { fr.frame, fr.line, fr.line };
-    funnel(c, x0 + ND_W / 2, y0, RED_HV, RED_DEPTH, bands, RED_BANDS, x0 + 3, x1 - 3);
+    funnel(c, gx0 + ND_W / 2, y0, RED_HV, RED_DEPTH, bands, RED_BANDS, x0 + 3, x1 - 3);   /* (under the table) */
     const uint32_t rpal[] = { fr.rivet, C_WHITE, fr.line };
     int ty = y0 + 5;
     sprite(c, x0 + 4, ty, RIVET, 4, rpal, false);
     sprite(c, x1 - 8, ty, RIVET, 4, rpal, false);
-    sprite(c, x0 + 58, ty, RIVET, 4, rpal, false);
-    sprite(c, x1 - 62, ty, RIVET, 4, rpal, false);
+    sprite(c, gx0 + 58, ty, RIVET, 4, rpal, false);
+    sprite(c, gx1 - 62, ty, RIVET, 4, rpal, false);
     /* the bottom ones stay inside the line when the corners are round */
     int o = (int)ceilf(r - (r - 4) / 1.4142f);
     if (o < 4) o = 4;
@@ -654,7 +658,8 @@ static void panel_blue(Canvas *c, const NdLayout *L, int table)
 {
     int x0 = L->gx, x1 = L->gx + ND_W, y0 = L->gy + L->gh, yb = L->vh;
     BlueBack bk = blue_back(table);
-    fill(c, x0, y0, ND_W, c->h - y0, bk.back);
+    if (nd_fill_sides) fill(c, 0, y0, c->w, c->h - y0, bk.back);         /* (as wide as the screen) */
+    else fill(c, x0, y0, ND_W, c->h - y0, bk.back);
     /* the lane wall: black, blue, four light blue, blue; the lane widens at the bottom (its wall
      * turns left), the blue edge of the table goes on down to the bottom */
     int bend = yb - 28;
@@ -1284,6 +1289,30 @@ void nd_render_game(const NdLayout *L, const Pinball *pb, const uint32_t *game, 
             uint32_t *dst = bg + (size_t)Y * c.w + x0;
             for (int x = 0; x < x1 - x0; x++) dst[x] = src[x] & 0xFFFFFFu;
         }
+
+    /* the sides of a screen wider than the game, on a table: its frame carried on (the colour of the
+     * panel under it, its rivets), the status bar's black; the panel under it is already as wide */
+    if (nd_fill_sides && (L->scene == ND_SCENE_RED || L->scene == ND_SCENE_BLUE) && L->gx > 0) {
+        int table = v ? v->table : (L->scene == ND_SCENE_RED ? PB_TABLE_RED : PB_TABLE_BLUE);
+        bool red = L->scene == ND_SCENE_RED;
+        RedFrame fr = red_frame(table);
+        BlueBack bk = blue_back(table);
+        uint32_t col = faded(&c, red ? fr.frame : bk.back), blk = faded(&c, C_BLACK);
+        int ytop = L->gy < 0 ? 0 : L->gy, yhud = L->gy + L->gh - PB_HUD_ROWS, yend = L->gy + L->gh;
+        for (int y = ytop; y < yend && y < c.h; y++) {
+            uint32_t k = y >= yhud ? blk : col;
+            uint32_t *row = bg + (size_t)y * c.w;
+            for (int x = 0; x < L->gx; x++) row[x] = k;
+            for (int x = L->gx + L->gw; x < c.w; x++) row[x] = k;
+        }
+        /* rivets (Red) or screws' heads (Blue): down the middle of each side */
+        int wl = L->gx, wr = c.w - (L->gx + L->gw);
+        const uint32_t rpal[] = { red ? fr.rivet : C_BLACK, C_WHITE, red ? fr.line : bk.lane };
+        for (int y = ytop + 6; y + 4 < yhud - 2; y += 36) {
+            if (wl >= 8) sprite(&c, wl / 2 - 2, y, RIVET, 4, rpal, false);
+            if (wr >= 8) sprite(&c, L->gx + L->gw + wr / 2 - 2, y, RIVET, 4, rpal, false);
+        }
+    }
 }
 
 void nd_render_controls(const NdLayout *L, const NdState *st, const uint32_t *bg, const int fade[2], uint32_t *out)

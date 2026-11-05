@@ -663,7 +663,7 @@ static void panel_blue(Canvas *c, const NdLayout *L, int table)
     /* the lane wall: black, blue, four light blue, blue; the lane widens at the bottom (its wall
      * turns left), the blue edge of the table goes on down to the bottom */
     int bend = yb - 28;
-    for (int y = y0; y < c->h; y++) {
+    for (int y = y0; y < c->h && !nd_fill_sides; y++) {           /* (the panel as wide as the screen: plain) */
         int k = y >= bend ? (y - bend) / 4 + 1 : 0;
         int xk = x1 - 8 - k;
         put(c, xk, y, C_BLACK);

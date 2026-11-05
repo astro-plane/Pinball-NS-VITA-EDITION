@@ -50,10 +50,15 @@ target_link_libraries(pinball-ns
   ScePower_stub ScePgf_stub SceCommonDialog_stub SceAppUtil_stub SceKernelThreadMgr_stub SceAppMgr_stub)
 
 vita_create_self(eboot.bin pinball-ns)
+# the start screens are on black; a picture of your own (960 x 544) in platform/vita/chooser_bg.png goes above them
+set(PNS_EXTRA_FILES)
+if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/chooser_bg.png)
+  set(PNS_EXTRA_FILES FILE ${CMAKE_CURRENT_SOURCE_DIR}/chooser_bg.png chooser_bg.png)
+endif()
 vita_create_vpk(PinballNS.vpk ${VITA_TITLEID} eboot.bin
   VERSION ${VITA_VERSION}
   NAME ${VITA_APP_NAME}
   FILE ${CMAKE_CURRENT_SOURCE_DIR}/sce_sys/icon0.png sce_sys/icon0.png
   FILE ${CMAKE_CURRENT_SOURCE_DIR}/sce_sys/pic0.png sce_sys/pic0.png
-  FILE ${CMAKE_CURRENT_SOURCE_DIR}/chooser_bg.png chooser_bg.png
+  ${PNS_EXTRA_FILES}
 )

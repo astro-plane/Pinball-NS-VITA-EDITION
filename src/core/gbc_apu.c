@@ -316,14 +316,140 @@ static void noise_run(GBCApu *a, uint64_t now)
     if (a->ch3.on) a->ch3.timer -= (int)used;
 }
 
+/* The wave channel at a high frequency (the game's voice clips: the channel at its highest rate,
+ * its volume written by the CPU between the samples) has an event every 2 to 8 cycles, between
+ * which nothing else happens: run here in a tight loop, as noise_run, with the same intervals and
+ * the same operations on the samples as gbc_apu_run, in the same order (the same bits). The output
+ * of each of the 16 levels of the channel is mixed once, when it first comes. */
+static void wave_run(GBCApu *a, uint64_t now)
+{
+    GBCWave *c = &a->ch3;
+    int64_t m = (int64_t)(now - a->last);        /* the next event of everything else */
+    if (a->fs_timer < m) m = a->fs_timer;
+    if (a->ch1.on && a->ch1.timer < m) m = a->ch1.timer;
+    if (a->ch2.on && a->ch2.timer < m) m = a->ch2.timer;
+    if (a->ch4.on && a->ch4.timer < m) m = a->ch4.timer;
+    int t = c->timer, period = wave_period(c);
+    if (t < 1 || t > (1 << 20) || t >= m || period > (1 << 20)) return;
+
+    double out[16][2], prod[16][2];              /* [sample][left, right], and times a whole period */
+    uint32_t have = 0;
+    double sp = a->sample_pos, al = a->acc_l, ar = a->acc_r;
+    const double cps = a->cyc_per_sample, dp = (double)period;
+    int64_t used = 0;
+    do {
+        int sel = c->sample;
+        if (!(have & (1u << sel))) {
+            mix(a, &out[sel][0], &out[sel][1]);  /* (the channel's sample as it is now: sel) */
+            prod[sel][0] = out[sel][0] * dp;
+            prod[sel][1] = out[sel][1] * dp;
+            have |= 1u << sel;
+        }
+        double dt = (double)t, spn = sp + dt;
+        ASTAT(gbc_stat_apu_iter++);
+        ASTAT(gbc_stat_apu_ev[3]++);
+        if (spn < cps && t == period) {          /* accumulate, no sample ends */
+            al += prod[sel][0];
+            ar += prod[sel][1];
+            sp = spn;
+        } else {
+            double l = out[sel][0], r = out[sel][1];
+            while (sp + dt >= cps) {             /* accumulate */
+                double part = cps - sp;
+                al += l * part;
+                ar += r * part;
+                ASTAT(gbc_stat_apu_emit++);
+                emit(a, al, ar);
+                al = ar = 0;
+                dt -= part;
+                sp = 0;
+            }
+            al += l * dt;
+            ar += r * dt;
+            sp += dt;
+        }
+        used += t;
+        t = period;                              /* the event: timer - dt = 0, + period */
+        c->pos = (c->pos + 1) & 31;
+        wave_fetch(a);
+    } while (t < m - used);
+    a->sample_pos = sp;
+    a->acc_l = al;
+    a->acc_r = ar;
+    c->timer = t;
+    a->last += (uint64_t)used;
+    a->fs_timer -= (int32_t)used;
+    if (a->ch1.on) a->ch1.timer -= (int)used;
+    if (a->ch2.on) a->ch2.timer -= (int)used;
+    if (a->ch4.on) a->ch4.timer -= (int)used;
+}
+
+/* The wave and the noise channels both at a high frequency (a voice clip over the noise of the
+ * music): their events in turn, between which nothing else happens, in one loop (noise_run and
+ * wave_run each stop at the other's next event). The same intervals and the same operations as
+ * gbc_apu_run (accumulate itself, the events in its order), the outputs of the pairs of levels
+ * (wave sample, noise bit) mixed once each. */
+static void wave_noise_run(GBCApu *a, uint64_t now)
+{
+    GBCWave *w = &a->ch3;
+    GBCNoise *n = &a->ch4;
+    int64_t m = (int64_t)(now - a->last);        /* the next event of everything else */
+    if (a->fs_timer < m) m = a->fs_timer;
+    if (a->ch1.on && a->ch1.timer < m) m = a->ch1.timer;
+    if (a->ch2.on && a->ch2.timer < m) m = a->ch2.timer;
+    int t3 = w->timer, t4 = n->timer, p3 = wave_period(w), p4 = noise_period(n);
+    if (t3 < 1 || t4 < 1 || t3 > (1 << 20) || t4 > (1 << 20) || p3 > (1 << 20) || p4 > (1 << 20)) return;
+    double out[32][2];                           /* [wave sample << 1 | noise bit][left, right] */
+    uint32_t have = 0;
+    int64_t used = 0;
+    for (;;) {
+        int dt = t3 < t4 ? t3 : t4;
+        if (dt >= m - used) break;               /* with another event: gbc_apu_run */
+        int sel = w->sample << 1 | (n->lfsr & 1);
+        if (!(have & (1u << sel))) { mix(a, &out[sel][0], &out[sel][1]); have |= 1u << sel; }
+        ASTAT(gbc_stat_apu_iter++);
+        accumulate(a, out[sel][0], out[sel][1], (double)dt);
+        used += dt;
+        t3 -= dt;
+        t4 -= dt;
+        if (t3 <= 0) {
+            ASTAT(gbc_stat_apu_ev[3]++);
+            t3 += p3;
+            w->pos = (w->pos + 1) & 31;
+            wave_fetch(a);
+        }
+        if (t4 <= 0) {
+            ASTAT(gbc_stat_apu_ev[4]++);
+            t4 += p4;
+            uint16_t fb = (uint16_t)((n->lfsr ^ (n->lfsr >> 1)) & 1);
+            n->lfsr = (uint16_t)((n->lfsr >> 1) | (fb << 14));
+            if (n->width7) n->lfsr = (uint16_t)((n->lfsr & ~0x40) | (fb << 6));
+        }
+    }
+    w->timer = t3;
+    n->timer = t4;
+    a->last += (uint64_t)used;
+    a->fs_timer -= (int32_t)used;
+    if (a->ch1.on) a->ch1.timer -= (int)used;
+    if (a->ch2.on) a->ch2.timer -= (int)used;
+}
+
 void gbc_apu_run(GBC *g)
 {
     GBCApu *a = &g->s.apu;
     uint64_t now = gbc_sound_time(&g->s);
     ASTAT(gbc_stat_apu_runs++);
     while (a->last < now) {
+        if (a->power && a->ch3.on && a->ch4.on) {
+            wave_noise_run(a, now);
+            if (a->last >= now) break;
+        }
         if (a->power && a->ch4.on) {
             noise_run(a, now);
+            if (a->last >= now) break;
+        }
+        if (a->power && a->ch3.on) {
+            wave_run(a, now);
             if (a->last >= now) break;
         }
         int64_t dt = (int64_t)(now - a->last);
